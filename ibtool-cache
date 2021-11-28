@@ -1,0 +1,61 @@
+#!/bin/bash
+set -o pipefail
+
+case "${INPUT_FILE_PATH}" in
+  *.storyboard)
+    OUTPUT_EXTENSION=storyboardc
+    ;;
+  *.xib)
+    OUTPUT_EXTENSION=nib
+    ;;
+esac
+
+OUTPUT_PATH="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/${INPUT_FILE_BASE}.${OUTPUT_EXTENSION}"
+
+INPUT_CONTENT_KEY="${INPUT_FILE_BASE}-sha1-$(shasum "${INPUT_FILE_PATH}" | cut -d' ' -f1)"
+
+CACHE_DIR="${HOME}/.ibtool-cache"
+[ ! -d  "${CACHE_DIR}" ] && mkdir -p "${CACHE_DIR}"
+
+OUTPUT_HASHED_TEXT_PATH="${CACHE_DIR}/${INPUT_CONTENT_KEY}.txt"
+OUTPUT_HASHED_NIB_PATH="${CACHE_DIR}/${INPUT_CONTENT_KEY}.${OUTPUT_EXTENSION}"
+
+if [ -f "${OUTPUT_HASHED_NIB_PATH}" ] && [ -f "${OUTPUT_HASHED_TEXT_PATH}" ]; then
+  # Hash unchanged, no need to run 'ibtool'
+  cp -fR "${OUTPUT_HASHED_NIB_PATH}" "${OUTPUT_PATH}"
+  cat "${OUTPUT_HASHED_TEXT_PATH}"
+  exit 0
+fi
+
+case "${TARGETED_DEVICE_FAMILY:-}" in
+  1,2)
+    TARGET_DEVICE_ARGS="--target-device ipad --target-device iphone"
+    ;;
+  1)
+    TARGET_DEVICE_ARGS="--target-device iphone"
+    ;;
+  2)
+    TARGET_DEVICE_ARGS="--target-device ipad"
+    ;;
+  3)
+    TARGET_DEVICE_ARGS="--target-device tv"
+    ;;
+  4)
+    TARGET_DEVICE_ARGS="--target-device watch"
+    ;;
+  *)
+    TARGET_DEVICE_ARGS="--target-device mac"
+    ;;
+esac
+
+export IBToolNeverDeque=1 # so that it doesn't hang in `ibtoold``
+export XCODE_DEVELOPER_USR_PATH="${DEVELOPER_BIN_DIR}/.."
+"${DEVELOPER_BIN_DIR}/ibtool" \
+  --errors --warnings --notices \
+  --module "${PRODUCT_MODULE_NAME}" \
+  --minimum-deployment-target ${!DEPLOYMENT_TARGET_SETTING_NAME} \
+  --output-format human-readable-text --auto-activate-custom-fonts \
+  --compile "${OUTPUT_PATH}" "$INPUT_FILE_PATH" \
+  ${TARGET_DEVICE_ARGS} 2> /dev/null | tee "${OUTPUT_HASHED_TEXT_PATH}"
+
+cp -R "${OUTPUT_PATH}" "${OUTPUT_HASHED_NIB_PATH}"
