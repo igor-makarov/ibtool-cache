@@ -1,6 +1,11 @@
 #!/bin/bash
 set -o pipefail
 
+if [[ "${INPUT_FILE_PATH}" == "" ]]; then
+  echo 'error: This tool only works as a build rule script'
+  exit 1
+fi
+
 case "${INPUT_FILE_PATH}" in
   *.storyboard)
     OUTPUT_EXTENSION=storyboardc
